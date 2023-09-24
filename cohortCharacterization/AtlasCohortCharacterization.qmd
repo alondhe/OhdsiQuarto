@@ -1,0 +1,199 @@
+---
+title: "{{< env DOCUMENT_TITLE >}}"
+author: "{{< env DOCUMENT_AUTHOR >}}"
+title-block-banner: true
+theme:
+  light: cosmo
+format: 
+  html:
+    toc: true
+    toc-location: left
+    toc-title: "{{< env TOC_TITLE >}}"
+    toc-depth: 5
+    back-to-top-navigation: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(DT)
+```
+
+```{r, include=FALSE}
+
+if (Sys.getenv("AUTH_METHOD") != "") {
+  ROhdsiWebApi::authorizeWebApi(baseUrl = Sys.getenv("BASE_URL"),
+                                authMethod = Sys.getenv("AUTH_METHOD"),
+                                webApiUsername = Sys.getenv("WEBAPI_USERNAME"),
+                                webApiPassword = Sys.getenv("WEBAPI_PASSWORD"))
+}
+
+result <- ROhdsiWebApi::getCharacterizationResults(characterizationId = as.integer(Sys.getenv("CHARACTERIZATION_ID")),
+                                                   baseUrl = Sys.getenv("BASE_URL")) |>
+  dplyr::filter(generationId == as.integer(Sys.getenv("GENERATION_ID"))) |>
+  dplyr::filter(cohortId == as.integer(Sys.getenv("COHORT_ID")))
+
+cohorts <- ROhdsiWebApi::getCohortResults(cohortId = as.integer(Sys.getenv("COHORT_ID")), baseUrl = Sys.getenv("BASE_URL"))
+```
+
+```{r, include=FALSE}
+# Init Step to make sure that the dependencies are loaded
+
+dummy <- data.frame()
+htmltools::tagList(datatable(dummy))
+htmltools::tagList(plotly::plot_ly(dummy))
+```
+
+## Overview of Tables
+
+```{r results = "asis"}
+
+cat(Sys.getenv("PAGE_OVERVIEW"))
+cat("\n\n")
+
+```
+
+## Cohort Counts
+
+```{r results = "asis"}
+
+
+#cohortInclusionRuleStats <- cohorts$inclusionRuleStats |>
+#  dplyr::filter(sourceKey == Sys.getenv("CDM_SOURCE_KEY"))
+
+cohortTable <- cohorts$summary |> dplyr::filter(sourceKey == Sys.getenv("CDM_SOURCE_KEY")) |>
+  dplyr::select(`Source Name` = sourceName,
+                N = finalCount,
+                `Count Type` = modeLong)
+
+formattedTable <- DT::datatable(cohortTable, style = "bootstrap")
+print(htmltools::tagList(formattedTable))
+cat("\n\n")
+
+```
+
+## Prevalence Characteristics
+
+```{r results = "asis"}
+prevalenceResults <- result |> dplyr::filter(resultType == "PREVALENCE")
+
+for (thisAnalysis in unique(prevalenceResults$analysisName)) {
+  thisTable <- prevalenceResults |>
+    dplyr::filter(analysisName == thisAnalysis) |>
+    dplyr::select(strataName,
+                  covariateId, 
+                  covariateName, 
+                  N = count, 
+                  Percent = avg) |>
+    dplyr::mutate(Percent = round(x = Percent * 100.0, digits = 2)) |>
+    dplyr::distinct() 
+  
+  cat(sprintf("\n### %s\n\n", thisAnalysis))
+  
+  if (length(unique(thisTable$strataName)) == 1) {
+    if (is.na(unique(thisTable$strataName))) {
+      thisTable$strataName <- "All Strata"
+    }
+  }
+
+  for (thisStrataName in sort(unique(thisTable$strataName))) {
+    thisStrataTable <- thisTable |>
+      dplyr::filter(strataName == thisStrataName) |>
+      dplyr::arrange(strataName, covariateName) |>
+      dplyr::select(-covariateId) |>
+      dplyr::select(-strataName) |>
+      tibble::column_to_rownames(var = "covariateName")
+    
+    formattedTable <- DT::datatable(thisStrataTable, 
+                                  style = "bootstrap") |>
+    formatStyle(c("Percent"),
+              background = styleColorBar(range(0, 100), 'lightblue'),
+              backgroundSize = '98% 88%',
+              backgroundRepeat = 'no-repeat',
+              backgroundPosition = 'center')
+    
+    cat(sprintf("\n#### %s\n\n", ifelse(is.na(thisStrataName), "All Strata", thisStrataName)))
+    print(htmltools::tagList(formattedTable))
+    cat("\n\n")
+  }
+}
+
+```
+
+## Distributed Characteristics
+
+```{r results = "asis"}
+distributedResults <- result |> dplyr::filter(resultType == "DISTRIBUTION")
+distributedAnalyses <- unique(distributedResults$analysisName)
+
+for (thisAnalysis in distributedAnalyses) {
+  thisTable <- distributedResults |>
+    dplyr::filter(analysisName == thisAnalysis) |>
+    dplyr::select(strataName,
+                  covariateId, 
+                  covariateName, 
+                  N = count, 
+                  Percent = avg,
+                  stdDev,
+                  min,
+                  max,
+                  p10,
+                  p25,
+                  median,
+                  p75,
+                  p90) |>
+    dplyr::mutate(Percent = round(x = Percent, digits = 2)) |>
+    dplyr::mutate(stdDev = round(x = stdDev, digits = 2)) |>
+    dplyr::distinct()
+  
+  cat(sprintf("\n### %s\n\n", thisAnalysis))
+  
+  if (length(unique(thisTable$strataName)) == 1) {
+    if (is.na(unique(thisTable$strataName))) {
+      thisTable$strataName <- "All Strata"
+    }
+  }
+  for (thisStrataName in sort(unique(thisTable$strataName))) {
+    thisStrataTable <- thisTable |>
+      dplyr::filter(strataName == thisStrataName) |>
+      dplyr::arrange(strataName, covariateName) |>
+      dplyr::select(-covariateId) |>
+      dplyr::select(-strataName)
+    
+    formattedTable <- DT::datatable(thisStrataTable, 
+                                  style = "bootstrap",
+                                  rownames = FALSE)
+  
+    if (nrow(thisStrataTable) > 2) {
+      finalPlot <- plotly::plot_ly(y = thisStrataTable$covariateName,
+                               type = "box", 
+                               color = thisStrataTable$covariateName,
+                               q1 = thisStrataTable$p25,
+                               median = thisStrataTable$median,
+                               q3 = thisStrataTable$p75,
+                               lowerfence = thisStrataTable$min,
+                               upperfence = thisStrataTable$max, 
+                               mean = thisStrataTable$median,
+                               sd = thisStrataTable$stdDev)
+    
+    } else {
+        finalPlot <- plotly::plot_ly(y = thisStrataTable$covariateName,
+                                 type = "box",
+                                 q1 = thisStrataTable$p25,
+                                 median = thisStrataTable$median,
+                                 q3 = thisStrataTable$p75,
+                                 lowerfence = thisStrataTable$min,
+                                 upperfence = thisStrataTable$max, 
+                                 mean = thisStrataTable$median,
+                                 sd = thisStrataTable$stdDev)
+    }
+
+    cat(sprintf("\n#### %s\n\n", ifelse(is.na(thisStrataName), "All Strata", thisStrataName)))
+    print(htmltools::tagList(formattedTable))
+    cat("\n\n")
+    print(htmltools::tagList(finalPlot))
+    cat("\n\n")
+  }
+  
+}
+```
