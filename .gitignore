@@ -49,3 +49,6 @@ po/*~
 rsconnect/
 
 *.local
+
+test.yml
+

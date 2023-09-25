@@ -21,27 +21,10 @@ library(DT)
 
 ```{r, include=FALSE}
 
-if (Sys.getenv("AUTH_METHOD") != "") {
-  ROhdsiWebApi::authorizeWebApi(baseUrl = Sys.getenv("BASE_URL"),
-                                authMethod = Sys.getenv("AUTH_METHOD"),
-                                webApiUsername = Sys.getenv("WEBAPI_USERNAME"),
-                                webApiPassword = Sys.getenv("WEBAPI_PASSWORD"))
-}
-
-result <- ROhdsiWebApi::getCharacterizationResults(characterizationId = as.integer(Sys.getenv("CHARACTERIZATION_ID")),
-                                                   baseUrl = Sys.getenv("BASE_URL")) |>
-  dplyr::filter(generationId == as.integer(Sys.getenv("GENERATION_ID"))) |>
-  dplyr::filter(cohortId == as.integer(Sys.getenv("COHORT_ID")))
-
-cohorts <- ROhdsiWebApi::getCohortResults(cohortId = as.integer(Sys.getenv("COHORT_ID")), baseUrl = Sys.getenv("BASE_URL"))
-```
-
-```{r, include=FALSE}
+OhdsiQuarto::initializeWebApi()
+result <- OhdsiQuarto::getCharacterizationResultSet()
 # Init Step to make sure that the dependencies are loaded
-
-dummy <- data.frame()
-htmltools::tagList(datatable(dummy))
-htmltools::tagList(plotly::plot_ly(dummy))
+OhdsiQuarto::getHeader()
 ```
 
 ## Overview of Tables

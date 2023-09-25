@@ -1,0 +1,97 @@
+---
+title: "{{< env DOCUMENT_TITLE >}}"
+author: "{{< env DOCUMENT_AUTHOR >}}"
+title-block-banner: true
+theme:
+  dark: darkly
+  light: cosmo
+format: 
+  html:
+    toc: true
+    toc-location: left
+    toc-title: "{{< env TOC_TITLE >}}"
+    back-to-top-navigation: true
+---
+
+## Concept Set Definitions
+
+```{r echo=FALSE}
+
+.expressionToDf <- function(items) {
+  result <- lapply(items, function(item) {
+    as.data.frame(item)
+  })
+  df <- do.call(rbind, result)
+  colnames(df) <- gsub("concept.", "", colnames(df))
+  df <- df |>
+    dplyr::select(CONCEPT_ID, CONCEPT_NAME, STANDARD_CONCEPT, DOMAIN_ID, isExcluded, includeDescendants)
+  return (df)
+}
+
+if (Sys.getenv("AUTH_METHOD") != "") {
+  ROhdsiWebApi::authorizeWebApi(baseUrl = Sys.getenv("BASE_URL"),
+                                authMethod = Sys.getenv("AUTH_METHOD"),
+                                webApiUsername = Sys.getenv("WEBAPI_USERNAME"),
+                                webApiPassword = Sys.getenv("WEBAPI_PASSWORD"))
+}
+
+conceptSetIds <- (strsplit(x = Sys.getenv("CONCEPT_SET_IDS"), split = ",", fixed = TRUE))[[1]]
+conceptSetLists <- lapply(as.integer(conceptSetIds), function(conceptSetId) {
+  result <- ROhdsiWebApi::getConceptSetDefinition(conceptSetId = conceptSetId, baseUrl = Sys.getenv("BASE_URL"))
+  conceptIds <- ROhdsiWebApi::resolveConceptSet(conceptSetDefinition = result$expression, baseUrl = Sys.getenv("BASE_URL"))
+  list(id = conceptSetId,
+       name = result$name,
+       createdBy = result$createdBy,
+       modifiedBy = result$modifiedBy,
+       createdDate = result$createdDate,
+       modifiedDate = result$modifiedBy, 
+       conceptIds = conceptIds,
+       sourceConcept
+       definition = .expressionToDf(result$expression$items))
+})
+
+
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(DT)
+```
+
+```{r, include=FALSE}
+# Init Step to make sure that the dependencies are loaded
+
+dummy <- data.frame()
+htmltools::tagList(datatable(dummy))
+htmltools::tagList(plotly::plot_ly(dummy))
+```
+
+```{r results = "asis"}
+
+for (thisConceptSet in conceptSetLists) {
+  formattedTable <- DT::datatable(thisConceptSet$definition, 
+                                  style = "bootstrap")
+  
+  cat(sprintf("\n### %s: %s\n\n", thisConceptSet$id, thisConceptSet$name))
+  # cat(sprintf("Created Date: %s; Modified Date: %s", thisConceptSet$createdDate, thisConceptSet$modifiedDate))
+  print(htmltools::tagList(formattedTable))
+  cat("\n\n")
+}
+
+```
+
+## Source Concepts
+
+```{r results = "asis"}
+
+for (thisConceptSet in conceptSetLists) {
+  formattedTable <- DT::datatable(thisConceptSet$definition, 
+                                  style = "bootstrap")
+  
+  ROhdsiWebApi::getSourceConcepts(conceptIds = conceptIds, baseUrl = Sys.getenv("BASE_URL"), snakeCaseToCamelCase = FALSE)
+  
+  cat(sprintf("\n### %s: %s\n\n", thisConceptSet$id, thisConceptSet$name))
+  # cat(sprintf("Created Date: %s; Modified Date: %s", thisConceptSet$createdDate, thisConceptSet$modifiedDate))
+  print(htmltools::tagList(formattedTable))
+  cat("\n\n")
+}

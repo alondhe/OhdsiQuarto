@@ -1,0 +1,25 @@
+Package: OhdsiQuarto
+Type: Package
+Title: Exports Quarto based documents using Atlas designs and results
+Version: 0.0.1
+Date: 2023-09-24
+Authors@R: c(
+  person("Ajit", "Londhe", email = "londhe@ohdsi,org", role = c("aut", "cre"))
+  )
+Maintainer: Ajit Londhe <londhe@ohdsi.org>
+Description: An R package for exporting Quarto based documents using Atlas designs and results.
+License: Apache License (>= 2)
+VignetteBuilder: knitr
+URL: https://github.com/alondhe/OhdsiQuarto
+BugReports: https://github.com/alondhe/OhdsiQuarto/issues
+Depends:
+    R (>= 4.2.1)
+Imports:
+    ROhdsiWebApi,
+    CirceR,
+    magrittr,
+    ParallelLogger,
+    dplyr,
+    quarto
+RoxygenNote: 7.2.3
+Encoding: UTF-8
